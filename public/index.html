@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bus Tracker with Live Lat/Lon</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    #map { height: 80vh; width:100% }
+    #info { height: 20vh; padding:10px; font-family:sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="info">Bus locations will appear here...</div>
+
+  <!-- Include stations / route / bus data -->
+  <script src="bus-tracker-osm/stations.js"></script>
+
+  <script>
+  window.onload = function() {
+      // Initialize map
+      var map = L.map('map').setView(route[0], 16);
+
+      // OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      // Bus icon
+      var busIcon = L.icon({
+          iconUrl: 'https://cdn-icons-png.flaticon.com/512/61/61456.png',
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+      });
+
+      // Draw initial polyline
+      var line = L.polyline(route, {color:'blue'}).addTo(map);
+      map.fitBounds(line.getBounds());
+
+      var stopTime = 30; // seconds at station
+      var travelStep = 1000; // 1 sec per step
+
+      // Create bus objects
+      function createBus(bus) {
+          const start = route[0];
+          const next = route[1];
+          const lat = start[0] + (next[0]-start[0])*bus.startFraction;
+          const lon = start[1] + (next[1]-start[1])*bus.startFraction;
+          return {
+              name: bus.name,
+              marker: L.marker([lat, lon], {icon: busIcon}).addTo(map).bindPopup(bus.name),
+              currentIndex: 0,
+              fraction: bus.startFraction,
+              moving: true
+          };
+      }
+
+      var mapBuses = buses.map(createBus);
+
+      // Move bus function
+      function moveBus(bus) {
+          if(!bus.moving) return;
+
+          var start = route[bus.currentIndex];
+          var end = route[bus.currentIndex+1];
+
+          bus.fraction += 0.01;
+          if(bus.fraction >= 1) {
+              bus.currentIndex++;
+              bus.fraction = 0;
+
+              if(stations.includes(bus.currentIndex)) {
+                  bus.moving = false;
+                  setTimeout(() => { bus.moving = true; }, stopTime*1000);
+              }
+
+              if(bus.currentIndex >= route.length-1) bus.currentIndex = 0; // loop
+              return;
+          }
+
+          var lat = start[0] + (end[0]-start[0])*bus.fraction;
+          var lon = start[1] + (end[1]-start[1])*bus.fraction;
+          bus.marker.setLatLng([lat, lon]);
+
+          // Update info
+          document.getElementById("info").innerHTML = mapBuses
+              .map(b => `${b.name}: ${b.marker.getLatLng().lat.toFixed(6)}, ${b.marker.getLatLng().lng.toFixed(6)}`)
+              .join("<br>");
+      }
+
+      setInterval(() => mapBuses.forEach(moveBus), travelStep);
+
+      // ORS API fetch (optional)
+      const apiKey = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjUyZDBiMmI0NmQ0ZDQ2ZTZiZDBlYTdmNGExMjM3OTQ2IiwiaCI6Im11cm11cjY0In0=";
+      const url = `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${apiKey}&start=77.573631,12.915649&end=77.5475,12.9410`;
+
+      fetch(url)
+      .then(res => res.json())
+      .then(data => {
+          const coordinates = data.features[0].geometry.coordinates;
+          route.length = 0;
+          coordinates.forEach(c => route.push([c[1], c[0]]));
+          if(line) map.removeLayer(line);
+          line = L.polyline(route, {color:'blue'}).addTo(map);
+          map.fitBounds(line.getBounds());
+      })
+      .catch(err => console.error("ORS fetch error:", err));
+  };
+  </script>
+</body>
+</html>

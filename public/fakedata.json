@@ -1,0 +1,9 @@
+{
+  "buses": [
+    { "id":1, "name":"Bus 101", "routeIndex":0, "fraction":0, "color":"red" },
+    { "id":2, "name":"Bus 102", "routeIndex":0, "fraction":-0.2, "color":"green" }
+  ],
+  "route": [
+    [50,550],[100,500],[150,450],[200,400],[250,350],[300,300],[350,250],[400,200],[450,150]
+  ]
+}
